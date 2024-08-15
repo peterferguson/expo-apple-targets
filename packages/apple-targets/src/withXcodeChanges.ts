@@ -12,6 +12,8 @@ import {
   XCBuildConfiguration,
   XCConfigurationList,
   XcodeProject,
+  XCRemoteSwiftPackageReference,
+  XCSwiftPackageProductDependency,
 } from "@bacons/xcode";
 import { BuildSettings } from "@bacons/xcode/json";
 import { ExpoConfig } from "@expo/config";
@@ -20,6 +22,7 @@ import fs from "fs";
 import { sync as globSync } from "glob";
 import path from "path";
 
+import { SwiftDependency } from "./config";
 import {
   ExtensionType,
   getMainAppTarget,
@@ -28,6 +31,7 @@ import {
   productTypeForType,
 } from "./target";
 import fixture from "./template/XCBuildConfiguration.json";
+import { withXcodeProjectBeta } from "./withXcparse";
 const TemplateBuildSettings = fixture as unknown as Record<
   string,
   {
@@ -37,7 +41,6 @@ const TemplateBuildSettings = fixture as unknown as Record<
     info: any;
   }
 >;
-import { withXcodeProjectBeta } from "./withXcparse";
 
 export type XcodeSettings = {
   name: string;
@@ -54,6 +57,8 @@ export type XcodeSettings = {
   frameworks: string[];
 
   type: ExtensionType;
+
+  swiftDependencies?: SwiftDependency[];
 
   hasAccentColor?: boolean;
 
@@ -948,6 +953,76 @@ async function applyXcodeChanges(
     return assets;
   }
 
+  function configureTargetWithSwiftDependencies(target: PBXNativeTarget) {
+    console.log("Configure Swift Deps");
+    // Add Swift Package Dependency
+    props.swiftDependencies?.forEach((dependency) => {
+      console.log(`Adding dependency: ${dependency.repository}`);
+
+      // Check for project dependency
+      const remoteProps = {
+        repositoryURL: dependency.repository,
+        requirement: {
+          branch: dependency.branch,
+          kind: "branch",
+        },
+      };
+      const swiftDependency = XCRemoteSwiftPackageReference.create(
+        project,
+        remoteProps
+      );
+
+      const existingPkgReference =
+        project.rootObject.props.packageReferences?.find(
+          (r) =>
+            r instanceof XCRemoteSwiftPackageReference &&
+            r.props.repositoryURL === dependency.repository
+        ) as XCRemoteSwiftPackageReference | undefined;
+
+      if (existingPkgReference) {
+        console.log("Existing PKG Reference");
+        // existingPkgReference.removeFromProject();
+        existingPkgReference.props.repositoryURL = remoteProps.repositoryURL;
+        existingPkgReference.props.requirement = remoteProps.requirement;
+      } else {
+        if (project.rootObject.props.packageReferences) {
+          project.rootObject.props.packageReferences.push(swiftDependency);
+        } else {
+          project.rootObject.props.packageReferences = [swiftDependency];
+        }
+      }
+
+      // Add dependency to target
+      console.log("Product Dependencies: ", target.props.packageProductDependencies);
+      const existingProductDependency =
+        target.props.packageProductDependencies?.find((dep) => {
+          return dep.props.productName === dependency.name;
+        });
+
+      if (existingProductDependency) {
+        console.log("Existing Product Dependency");
+        // existingProductDependency.removeFromProject();
+        existingProductDependency.props.productName = dependency.name;
+        existingProductDependency.props.package =
+          existingPkgReference ?? swiftDependency;
+      } else {
+        const packageProduct = XCSwiftPackageProductDependency.create(project, {
+          productName: dependency.name,
+          package: swiftDependency,
+        });
+        if (target.props.packageProductDependencies) {
+          target.props.packageProductDependencies.push(packageProduct);
+        } else {
+          target.props.packageProductDependencies = [packageProduct];
+        }
+      }
+
+      console.log(
+        `Target Dependencies: ${target.props.packageProductDependencies}`
+      );
+    });
+  }
+
   if (targetToUpdate) {
     // Remove existing build phases
     targetToUpdate.props.buildConfigurationList.props.buildConfigurations.forEach(
@@ -977,6 +1052,8 @@ async function applyXcodeChanges(
     configureTargetWithKnownSettings(targetToUpdate);
 
     applyDevelopmentTeamIdToTargets();
+
+    configureTargetWithSwiftDependencies(targetToUpdate);
 
     syncMarketingVersions();
     return project;
@@ -1104,6 +1181,8 @@ async function applyXcodeChanges(
       alphaExtensionAppexBf.props.fileRef /* alphaExtension.appex */,
     productType: productTypeForType(props.type),
   });
+
+  configureTargetWithSwiftDependencies(widgetTarget);
 
   configureTargetWithKnownSettings(widgetTarget);
 
