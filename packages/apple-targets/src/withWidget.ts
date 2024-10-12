@@ -99,7 +99,7 @@ const withWidget: ConfigPlugin<Props> = (config, props) => {
       fs.mkdirSync(widgetFolderAbsolutePath, { recursive: true });
 
       const files: [string, string][] = [
-        ["Info.plist", getTargetInfoPlistForType(props.type)],
+        ["Info.plist", getTargetInfoPlistForType(props.type, props?.infoPlist)],
       ];
 
       // if (props.type === "widget") {

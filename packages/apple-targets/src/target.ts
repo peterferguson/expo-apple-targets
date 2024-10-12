@@ -1,5 +1,6 @@
 import { PBXNativeTarget, XcodeProject } from "@bacons/xcode";
 import plist from "@expo/plist";
+import type { Config } from "./config";
 
 export type ExtensionType =
   | "widget"
@@ -45,12 +46,13 @@ export const KNOWN_EXTENSION_POINT_IDENTIFIERS: Record<string, ExtensionType> =
   };
 
 // TODO: Maybe we can replace `NSExtensionPrincipalClass` with the `@main` annotation that newer extensions use?
-export function getTargetInfoPlistForType(type: ExtensionType) {
+export function getTargetInfoPlistForType(type: ExtensionType, infoPlist: Config['infoPlist'] = {}) {
   if (type === "watch") {
-    return plist.build({});
+    return plist.build({ ...infoPlist });
   }
   if (type === "action") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionAttributes: {
           NSExtensionActivationRule: {
@@ -75,6 +77,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
   }
   if (type === "clip") {
     return plist.build({
+      ...infoPlist,
       CFBundleName: "$(PRODUCT_NAME)",
       CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)",
       CFBundleVersion: "$(CURRENT_PROJECT_VERSION)",
@@ -94,6 +97,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
 
   if (type === "imessage") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionPointIdentifier,
         // This is hardcoded as there is no Swift code in the imessage extension.
@@ -103,6 +107,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
   }
   if (type === "account-auth") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionPointIdentifier,
 
@@ -119,6 +124,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
   }
   if (type === "credentials-provider") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionPointIdentifier,
         NSExtensionPrincipalClass:
@@ -128,6 +134,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
   }
   if (type === "notification-service") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionAttributes: {
           NSExtensionActivationRule: "TRUEPREDICATE",
@@ -140,6 +147,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "quicklook-thumbnail") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionAttributes: {
           QLSupportedContentTypes: [],
@@ -151,6 +159,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "spotlight") {
     return plist.build({
+      ...infoPlist,
       CSExtensionLabel: "myImporter",
       NSExtension: {
         NSExtensionAttributes: {
@@ -164,6 +173,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "share") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionAttributes: {
           NSExtensionActivationRule: "TRUEPREDICATE",
@@ -176,6 +186,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "intent-ui") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionAttributes: {
           IntentsSupported: ["INSendMessageIntent"],
@@ -188,6 +199,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "intent") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionAttributes: {
           IntentsRestrictedWhileLocked: [],
@@ -204,6 +216,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "matter") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).RequestHandler",
         NSExtensionPointIdentifier,
@@ -211,6 +224,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "location-push") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).LocationPushService",
         NSExtensionPointIdentifier,
@@ -218,6 +232,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "safari") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         // TODO: Update `SafariWebExtensionHandler` dynamically
         NSExtensionPrincipalClass:
@@ -228,6 +243,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
     });
   } else if (type === "notification-content") {
     return plist.build({
+      ...infoPlist,
       NSExtension: {
         NSExtensionAttributes: {
           UNNotificationExtensionCategory: "myNotificationCategory",
@@ -244,6 +260,7 @@ export function getTargetInfoPlistForType(type: ExtensionType) {
 
   // Default: used for widget and bg-download
   return plist.build({
+    ...infoPlist,
     NSExtension: {
       NSExtensionPointIdentifier,
     },

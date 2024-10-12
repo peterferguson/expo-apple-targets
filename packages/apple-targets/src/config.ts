@@ -104,6 +104,11 @@ export type Config = {
   icon?: string;
 
   /**
+   * Optional additional `Info.plist` configuration
+   */
+  infoPlist?: Record<string, any>
+
+  /**
    * A list of additional frameworks to add to the target.
    * @example ["UserNotifications", "Intents"]
    */
