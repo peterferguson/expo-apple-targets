@@ -14,6 +14,7 @@ import {
 	XCBuildConfiguration,
 	XCConfigurationList,
 	XcodeProject,
+	XCLocalSwiftPackageReference,
 	XCRemoteSwiftPackageReference,
 	XCSwiftPackageProductDependency,
 } from "@bacons/xcode";
