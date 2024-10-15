@@ -13,203 +13,222 @@ import { withEASTargets } from "./withEasCredentials";
 import { withXcodeChanges } from "./withXcodeChanges";
 
 type Props = Config & {
-  directory: string;
+	directory: string;
 };
 let hasWarned = false;
 
 function kebabToCamelCase(str: string) {
-  return str.replace(/-([a-z])/g, function (g) {
-    return g[1].toUpperCase();
-  });
+	return str.replace(/-([a-z])/g, function (g) {
+		return g[1].toUpperCase();
+	});
 }
 const withWidget: ConfigPlugin<Props> = (config, props) => {
-  // TODO: Magically based on the top-level folders in the `ios-widgets/` folder
+	// TODO: Magically based on the top-level folders in the `ios-widgets/` folder
 
-  if (props.icon && !/https?:\/\//.test(props.icon)) {
-    props.icon = path.join(props.directory, props.icon);
-  }
+	if (props.icon && !/https?:\/\//.test(props.icon)) {
+		props.icon = path.join(props.directory, props.icon);
+	}
 
-  const widgetDir = path
-    .basename(props.directory)
-    .replace(/\/+$/, "")
-    .replace(/^\/+/, "");
+	const widgetDir = path
+		.basename(props.directory)
+		.replace(/\/+$/, "")
+		.replace(/^\/+/, "");
 
-  const widget = kebabToCamelCase(widgetDir);
+	const widget = kebabToCamelCase(widgetDir);
 
-  const widgetFolderAbsolutePath = path.join(
-    config._internal?.projectRoot ?? "",
-    props.directory
-  );
+	const widgetFolderAbsolutePath = path.join(
+		config._internal?.projectRoot ?? "",
+		props.directory,
+	);
 
-  const entitlementsFiles = globSync("*.entitlements", {
-    absolute: true,
-    cwd: widgetFolderAbsolutePath,
-  });
+	const entitlementsFiles = globSync("*.entitlements", {
+		absolute: true,
+		cwd: widgetFolderAbsolutePath,
+	});
 
-  if (entitlementsFiles.length > 1) {
-    throw new Error(
-      `Found multiple entitlements files in ${widgetFolderAbsolutePath}`
-    );
-  }
+	if (entitlementsFiles.length > 1) {
+		throw new Error(
+			`Found multiple entitlements files in ${widgetFolderAbsolutePath}`,
+		);
+	}
 
-  let entitlementsJson: undefined | Entitlements = props.entitlements;
+	let entitlementsJson: undefined | Entitlements = props.entitlements;
 
-  // If the user defined entitlements, then overwrite any existing entitlements file
-  if (props.entitlements) {
-    withDangerousMod(config, [
-      "ios",
-      async (config) => {
-        const entitlementsFilePath =
-          entitlementsFiles[0] ??
-          // Use the name `generated` to help indicate that this file should be in sync with the config
-          path.join(widgetFolderAbsolutePath, `generated.entitlements`);
+	// Apply default entitlements that must be present for a target to work.
+	function applyDefaultEntitlements(entitlements: Entitlements): Entitlements {
+		if (props.type === "clip") {
+			entitlements["com.apple.developer.parent-application-identifiers"] = [
+				`$(AppIdentifierPrefix)${config.ios!.bundleIdentifier!}`,
+			];
+			// NOTE: This doesn't seem to be required anymore (Oct 12 2024):
+			// entitlements["com.apple.developer.on-demand-install-capable"] = true;
+		}
 
-        if (entitlementsFiles[0]) {
-          console.log(
-            `[${widget}] Replacing ${path.relative(
-              widgetFolderAbsolutePath,
-              entitlementsFiles[0]
-            )} with entitlements JSON from config`
-          );
-        }
-        fs.writeFileSync(
-          entitlementsFilePath,
-          plist.build(props.entitlements as any)
-        );
-        return config;
-      },
-    ]);
-  } else {
-    entitlementsJson = entitlementsFiles[0]
-      ? plist.parse(fs.readFileSync(entitlementsFiles[0], "utf8"))
-      : undefined;
-  }
+		return entitlements;
+	}
 
-  // Ensure the entry file exists
-  withDangerousMod(config, [
-    "ios",
-    async (config) => {
-      if (!hasWarned) {
-        hasWarned = true;
-        console.warn(
-          "You're using an experimental Config Plugin that is subject to breaking changes and has no E2E tests."
-        );
-      }
+	if (entitlementsJson) {
+		entitlementsJson = applyDefaultEntitlements(entitlementsJson);
+	}
 
-      fs.mkdirSync(widgetFolderAbsolutePath, { recursive: true });
+	// If the user defined entitlements, then overwrite any existing entitlements file
+	if (entitlementsJson) {
+		withDangerousMod(config, [
+			"ios",
+			async (config) => {
+				const entitlementsFilePath =
+					entitlementsFiles[0] ??
+					// Use the name `generated` to help indicate that this file should be in sync with the config
+					path.join(widgetFolderAbsolutePath, `generated.entitlements`);
 
-      const files: [string, string][] = [
-        ["Info.plist", getTargetInfoPlistForType(props.type, props?.infoPlist)],
-      ];
+				if (entitlementsFiles[0]) {
+					console.log(
+						`[${widget}] Replacing ${path.relative(
+							widgetFolderAbsolutePath,
+							entitlementsFiles[0],
+						)} with entitlements JSON from config`,
+					);
+				}
+				fs.writeFileSync(entitlementsFilePath, plist.build(entitlementsJson));
+				return config;
+			},
+		]);
+	} else {
+		entitlementsJson = entitlementsFiles[0]
+			? plist.parse(fs.readFileSync(entitlementsFiles[0], "utf8"))
+			: undefined;
+	}
 
-      // if (props.type === "widget") {
-      //   files.push(
-      //     [
-      //       "index.swift",
-      //       ENTRY_FILE.replace(
-      //         "// Export widgets here",
-      //         "// Export widgets here\n" + `        ${widget}()`
-      //       ),
-      //     ],
-      //     [widget + ".swift", WIDGET.replace(/alpha/g, widget)],
-      //     [widget + ".intentdefinition", INTENT_DEFINITION]
-      //   );
-      // }
+	// Ensure the entry file exists
+	withDangerousMod(config, [
+		"ios",
+		async (config) => {
+			if (!hasWarned) {
+				hasWarned = true;
+				console.warn(
+					"You're using an experimental Config Plugin that is subject to breaking changes and has no E2E tests.",
+				);
+			}
 
-      files.forEach(([filename, content]) => {
-        const filePath = path.join(widgetFolderAbsolutePath, filename);
-        if (!fs.existsSync(filePath)) {
-          fs.writeFileSync(filePath, content);
-        }
-      });
+			fs.mkdirSync(widgetFolderAbsolutePath, { recursive: true });
 
-      return config;
-    },
-  ]);
+			const files: [string, string][] = [
+				["Info.plist", getTargetInfoPlistForType(props.type, props?.infoPlist)],
+			];
 
-  const targetName = props.name ?? widget;
-  const bundleId = config.ios!.bundleIdentifier! + "." + widget;
+			// if (props.type === "widget") {
+			//   files.push(
+			//     [
+			//       "index.swift",
+			//       ENTRY_FILE.replace(
+			//         "// Export widgets here",
+			//         "// Export widgets here\n" + `        ${widget}()`
+			//       ),
+			//     ],
+			//     [widget + ".swift", WIDGET.replace(/alpha/g, widget)],
+			//     [widget + ".intentdefinition", INTENT_DEFINITION]
+			//   );
+			// }
 
-  withXcodeChanges(config, {
-    name: targetName,
-    cwd:
-      "../" +
-      path.relative(
-        config._internal!.projectRoot,
-        path.resolve(props.directory)
-      ),
-    deploymentTarget: props.deploymentTarget ?? "16.4",
-    bundleId,
-    icon: props.icon,
+			files.forEach(([filename, content]) => {
+				const filePath = path.join(widgetFolderAbsolutePath, filename);
+				if (!fs.existsSync(filePath)) {
+					fs.writeFileSync(filePath, content);
+				}
+			});
 
-    hasAccentColor: !!props.colors?.$accent,
+			return config;
+		},
+	]);
 
-    // @ts-expect-error: who cares
-    currentProjectVersion: config.ios?.buildNumber || 1,
+	const targetName = props.name ?? widget;
+	const bundleId = config.ios!.bundleIdentifier! + "." + widget;
 
-    frameworks: getFrameworksForType(props.type).concat(props.frameworks || []),
-    type: props.type,
-    teamId: props.appleTeamId,
-    swiftDependencies: props.swiftDependencies,
-  });
+	withXcodeChanges(config, {
+		name: targetName,
+		cwd:
+			"../" +
+			path.relative(
+				config._internal!.projectRoot,
+				path.resolve(props.directory),
+			),
+		deploymentTarget: props.deploymentTarget ?? "16.4",
+		bundleId,
+		icon: props.icon,
 
-  config = withEASTargets(config, {
-    targetName,
-    bundleIdentifier: bundleId,
-    entitlements: entitlementsJson,
-  });
+		hasAccentColor: !!props.colors?.$accent,
 
-  if (props.images) {
-    Object.entries(props.images).forEach(([name, image]) => {
-      withImageAsset(config, {
-        image,
-        name,
-        cwd: props.directory,
-      });
-    });
-  }
+		// @ts-expect-error: who cares
+		currentProjectVersion: config.ios?.buildNumber || 1,
 
-  withConfigColors(config, props);
+		frameworks: getFrameworksForType(props.type).concat(props.frameworks || []),
+		type: props.type,
+		teamId: props.appleTeamId,
+		swiftDependencies: props.swiftDependencies,
 
-  if (props.icon) {
-    withIosIcon(config, {
-      type: props.type,
-      cwd: props.directory,
-      // TODO: read from the top-level icon.png file in the folder -- ERR this doesn't allow for URLs
-      iconFilePath: props.icon,
-      isTransparent: ["action"].includes(props.type),
-    });
-  }
+		exportJs:
+			props.exportJs ??
+			// Assume App Clips are used for React Native.
+			props.type === "clip",
+	});
 
-  return config;
+	config = withEASTargets(config, {
+		targetName,
+		bundleIdentifier: bundleId,
+		entitlements: entitlementsJson,
+	});
+
+	if (props.images) {
+		Object.entries(props.images).forEach(([name, image]) => {
+			withImageAsset(config, {
+				image,
+				name,
+				cwd: props.directory,
+			});
+		});
+	}
+
+	withConfigColors(config, props);
+
+	if (props.icon) {
+		withIosIcon(config, {
+			type: props.type,
+			cwd: props.directory,
+			// TODO: read from the top-level icon.png file in the folder -- ERR this doesn't allow for URLs
+			iconFilePath: props.icon,
+			isTransparent: ["action"].includes(props.type),
+		});
+	}
+
+	return config;
 };
 
 const withConfigColors: ConfigPlugin<Pick<Props, "colors" | "directory">> = (
-  config,
-  props
+	config,
+	props,
 ) => {
-  props.colors = props.colors ?? {};
-  // const colors: NonNullable<Props["colors"]> = props.colors ?? {};
+	props.colors = props.colors ?? {};
+	// const colors: NonNullable<Props["colors"]> = props.colors ?? {};
 
-  // You use the WidgetBackground and `$accent` to style the widget configuration interface of a configurable widget. Apple could have chosen names to make that more obvious.
-  // https://useyourloaf.com/blog/widget-background-and-accent-color/
-  // i.e. when you press and hold on a widget to configure it, the background color of the widget configuration interface changes to the background color we set here.
-  // if (props.widgetBackgroundColor)
-  //   colors["$widgetBackground"] = props.widgetBackgroundColor;
-  // if (props.accentColor) colors["AccentColor"] = props.accentColor;
+	// You use the WidgetBackground and `$accent` to style the widget configuration interface of a configurable widget. Apple could have chosen names to make that more obvious.
+	// https://useyourloaf.com/blog/widget-background-and-accent-color/
+	// i.e. when you press and hold on a widget to configure it, the background color of the widget configuration interface changes to the background color we set here.
+	// if (props.widgetBackgroundColor)
+	//   colors["$widgetBackground"] = props.widgetBackgroundColor;
+	// if (props.accentColor) colors["AccentColor"] = props.accentColor;
 
-  if (props.colors) {
-    Object.entries(props.colors).forEach(([name, color]) => {
-      withIosColorset(config, {
-        cwd: props.directory,
-        name,
-        color: typeof color === "string" ? color : color.light,
-        darkColor: typeof color === "string" ? undefined : color.dark,
-      });
-    });
-  }
+	if (props.colors) {
+		Object.entries(props.colors).forEach(([name, color]) => {
+			withIosColorset(config, {
+				cwd: props.directory,
+				name,
+				color: typeof color === "string" ? color : color.light,
+				darkColor: typeof color === "string" ? undefined : color.dark,
+			});
+		});
+	}
 
-  return config;
+	return config;
 };
 
 export default withWidget;
