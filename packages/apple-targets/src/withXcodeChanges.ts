@@ -1054,10 +1054,14 @@ async function applyXcodeChanges(
 					kind: "branch",
 				},
 			};
-			const swiftDependency = XCRemoteSwiftPackageReference.create(
-				project,
-				remoteProps,
-			);
+
+			const swiftDependency =
+				"relativePath" in dependency
+					? XCLocalSwiftPackageReference.create(project, {
+							path: dependency.repository,
+							relativePath: dependency.relativePath,
+						})
+					: XCRemoteSwiftPackageReference.create(project, remoteProps);
 
 			const existingPkgReference =
 				project.rootObject.props.packageReferences?.find(

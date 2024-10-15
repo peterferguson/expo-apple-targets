@@ -10,6 +10,7 @@ export type DynamicColor = {
 export type SwiftDependency = {
   name: string;
   repository: string;
+  relativePath?: string;
   branch?: string;
   version?: string;
 };
