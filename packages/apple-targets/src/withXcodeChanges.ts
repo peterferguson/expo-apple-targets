@@ -17,6 +17,7 @@ import {
 	XCLocalSwiftPackageReference,
 	XCRemoteSwiftPackageReference,
 	XCSwiftPackageProductDependency,
+	PBXReferenceProxy,
 } from "@bacons/xcode";
 import { BuildSettings, ISA } from "@bacons/xcode/json";
 import { ExpoConfig } from "@expo/config";
@@ -992,11 +993,11 @@ async function applyXcodeChanges(
 
 	function generateProjectGroups(
 		project: any,
-		structure: (PBXBuildFile | PBXGroup)[],
+		structure: (PBXBuildFile | PBXGroup | PBXFileReference | PBXReferenceProxy)[],
 		magicCwd: string,
 	): any[] {
 		return structure.map((item) => {
-			if (item.props.isa === ISA.PBXGroup) {
+			if (item.props.isa === ISA.PBXGroup && item.props.name) {
 				// @ts-ignore
 				const childGroups = generateProjectGroups(
 					project,
@@ -1057,7 +1058,7 @@ async function applyXcodeChanges(
 			};
 
 			const swiftDependency =
-				"relativePath" in dependency
+				"relativePath" in dependency && dependency.relativePath
 					? XCLocalSwiftPackageReference.create(project, {
 							path: dependency.repository,
 							relativePath: dependency.relativePath,
