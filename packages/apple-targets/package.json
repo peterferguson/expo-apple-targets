@@ -1,5 +1,5 @@
 {
-  "name": "@duell10111/apple-targets",
+  "name": "@bacon/apple-targets",
   "version": "0.0.6-alpha.0",
   "description": "Generate Apple Targets with Expo Prebuild",
   "main": "build/index.js",
